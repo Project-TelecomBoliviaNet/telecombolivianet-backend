@@ -46,9 +46,9 @@ public class ForgotPasswordCommandTests
         CreatedAt = DateTime.UtcNow, Phone = phone,
     };
 
-    // TC-01: Email no registrado → Success genérico, IEmailService no llamado
+    // TC-01: Email no registrado → Failure con mensaje directo, IEmailService no llamado
     [Fact]
-    public async Task TC01_EmailNoRegistrado_RetornaSuccessGenerico_SinEnviarEmail()
+    public async Task TC01_EmailNoRegistrado_RetornaFailure_SinEnviarEmail()
     {
         _userRepo.Setup(r => r.GetAll())
             .Returns(new List<UserSystem>().AsQueryable().BuildMock());
@@ -56,15 +56,15 @@ public class ForgotPasswordCommandTests
         var result = await MakeHandler().Handle(
             new ForgotPasswordCommand("noexiste@bo.com"), CancellationToken.None);
 
-        result.IsSuccess.Should().BeTrue();
-        result.Value!.Channel.Should().Be("Email");
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("correo");
         _email.Verify(e => e.SendPasswordResetAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
-    // TC-02: Usuario inactivo → Success genérico, IEmailService no llamado
+    // TC-02: Usuario inactivo → Failure con mensaje directo, IEmailService no llamado
     [Fact]
-    public async Task TC02_UsuarioInactivo_RetornaSuccessGenerico_SinEnviarEmail()
+    public async Task TC02_UsuarioInactivo_RetornaFailure_SinEnviarEmail()
     {
         var user = MakeUser(status: UserStatus.Inactivo);
         _userRepo.Setup(r => r.GetAll())
@@ -73,7 +73,8 @@ public class ForgotPasswordCommandTests
         var result = await MakeHandler().Handle(
             new ForgotPasswordCommand(user.Email), CancellationToken.None);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("desactivada");
         _email.Verify(e => e.SendPasswordResetAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
