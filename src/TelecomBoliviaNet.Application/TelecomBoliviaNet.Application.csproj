@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TelecomBoliviaNet.Domain\TelecomBoliviaNet.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" Version="11.*" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.*" />
+    <!-- EF Core: necesario para .ToListAsync(), .Include(), .CountAsync() etc. en los servicios -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.*" />
+    <!-- BCrypt: usado en AuthService y UserSystemService para hash/verify de contraseñas -->
+    <PackageReference Include="BCrypt.Net-Next" Version="4.*" />
+    <!-- JWT: usado en JwtTokenService para generar y leer tokens -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.*" />
+  </ItemGroup>
+</Project>
