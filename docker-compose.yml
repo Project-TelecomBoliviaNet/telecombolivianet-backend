@@ -9,10 +9,11 @@ version: '3.9'
 #   Producción:  docker compose -f docker-compose.yml up -d
 #
 # Variables de entorno OBLIGATORIAS antes de levantar en producción:
-#   JWT_KEY            — Clave secreta JWT (mín. 32 chars, sin default)
-#   DB_PASSWORD        — Contraseña de PostgreSQL backend
-#   WHATSAPP_TOKEN     — Token de la API de WhatsApp Business
+#   JWT_KEY                  — Clave secreta JWT (mín. 32 chars, sin default)
+#   DB_PASSWORD              — Contraseña de PostgreSQL backend
+#   WHATSAPP_TOKEN           — Token de la API de WhatsApp Business
 #   WHATSAPP_PHONE_NUMBER_ID — ID de teléfono de WhatsApp Business
+#   GEMINI_API_KEY           — API key de Google Gemini (embeddings + RAG)
 #
 #   Copiar .env.example a .env y completar antes de levantar.
 #   Si JWT_KEY no está definida, el backend no arrancará.
@@ -26,7 +27,6 @@ volumes:
   postgres_backend:
   postgres_chatbot:
   redis_data:
-  ollama_data:
   uploads_data:
 
 services:
@@ -86,16 +86,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── OLLAMA — LLM local para el chatbot ───────────────────────
-  ollama:
-    image: ollama/ollama:latest
-    container_name: bolivianet-ollama
-    restart: unless-stopped
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - bolivianet
-
   # ── BACKEND — ASP.NET Core 8 ─────────────────────────────────
   backend:
     build:
@@ -105,14 +95,9 @@ services:
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__DefaultConnection: >
-        Host=postgres;Port=5432;Database=telecombolivianet;
-        Username=telecom_user;Password=${DB_PASSWORD:-telecom_pass_2025}
-      # ⚠️  JWT_KEY es OBLIGATORIO en producción — no tiene valor por defecto.
-      # Definir en .env o como secret de Docker/CI antes de levantar.
-      # Mínimo 32 caracteres aleatorios. Ejemplo de generación:
-      #   openssl rand -base64 48
-      Jwt__Key:      ${JWT_KEY:?ERROR: JWT_KEY no definida. Ver .env.example}
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=telecombolivianet;Username=telecom_user;Password=${DB_PASSWORD:-telecom_pass_2025}"
+      # ⚠️  JWT_KEY es OBLIGATORIO — sin valor por defecto. Generar: openssl rand -base64 48
+      Jwt__Key:      "${JWT_KEY:?ERROR: JWT_KEY no definida. Ver .env.example}"
       Jwt__Issuer:   TelecomBoliviaNet
       Jwt__Audience: TelecomBoliviaNet_Client
       WhatsApp__Token:         ${WHATSAPP_TOKEN:-}
@@ -132,6 +117,8 @@ services:
       retries: 3
 
   # ── CHATBOT — NestJS WhatsApp ─────────────────────────────────
+  # RAG y embeddings gestionados por Google Gemini (text-embedding-004 +
+  # gemini-2.0-flash). No requiere servicio Ollama local.
   chatbot:
     build:
       context: ./bolivianet-chatbot/bolivianet-chatbot
@@ -141,10 +128,10 @@ services:
     env_file:
       - ./bolivianet-chatbot/bolivianet-chatbot/.env
     environment:
-      SISTEMA_API_URL:      http://backend:5000
-      DB_HOST:              postgres-chatbot
-      REDIS_HOST:           redis
-      OLLAMA_BASE_URL:      http://ollama:11434
+      SISTEMA_API_URL: http://backend:5000
+      DB_HOST:         postgres-chatbot
+      REDIS_HOST:      redis
+      GEMINI_API_KEY:  "${GEMINI_API_KEY:-}"
     volumes:
       - uploads_data:/app/uploads
     depends_on:
