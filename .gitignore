@@ -1,0 +1,41 @@
+# Build output
+bin/
+obj/
+out/
+publish/
+dist/
+
+# Runtime / local config
+*.user
+*.suo
+.vs/
+appsettings.Development.json
+appsettings.runtime.json
+*.env
+.env
+
+# Logs
+logs/
+*.log
+Serilog/
+
+# Uploads generados en runtime
+wwwroot/uploads/
+
+# Entity Framework migrations temporales
+*.mdf
+*.ldf
+
+# NuGet
+.nuget/
+packages/
+*.nupkg
+
+# Rider / VS Code
+.idea/
+.vscode/
+*.DotSettings.user
+
+# OS
+.DS_Store
+Thumbs.db
