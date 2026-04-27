@@ -482,6 +482,55 @@ public class TicketService
             visit.Id, visit.ScheduledAt, tech?.FullName, visit.TechnicianId, visit.Observations, visit.CreatedAt));
     }
 
+    // ── US-BOT-RESCHEDULE · Reagendar visita vía chatbot ─────────────────────
+    public async Task<Result<TicketVisitDto>> RescheduleAsync(
+        Guid ticketId, RescheduleVisitDto dto, Guid actorId, string actorName, string ip)
+    {
+        var ticket = await _ticketRepo.GetByIdAsync(ticketId);
+        if (ticket is null) return Result<TicketVisitDto>.Failure("Ticket no encontrado.");
+        if (ticket.Status is TicketStatus.Cerrado or TicketStatus.Resuelto)
+            return Result<TicketVisitDto>.Failure("No se puede reagendar en un ticket cerrado o resuelto.");
+
+        if (!DateOnly.TryParseExact(dto.ScheduledDate, "yyyy-MM-dd", out var date))
+            return Result<TicketVisitDto>.Failure("Formato de fecha inválido.");
+        if (!TimeOnly.TryParseExact(dto.ScheduledTime, "HH:mm", out var time))
+            return Result<TicketVisitDto>.Failure("Formato de hora inválido.");
+
+        var scheduledAt = date.ToDateTime(time);
+        if (scheduledAt <= DateTime.Now.AddMinutes(-5))
+            return Result<TicketVisitDto>.Failure("La nueva fecha y hora deben ser futuras.");
+
+        var visit = new TicketVisit
+        {
+            TicketId        = ticketId,
+            ScheduledAt     = scheduledAt,
+            TechnicianId    = ticket.AssignedToUserId,
+            Observations    = dto.Reason?.Trim(),
+            CreatedByUserId = actorId,
+            CreatedAt       = DateTime.UtcNow,
+        };
+        await _visitRepo.AddAsync(visit);
+
+        await _commentRepo.AddAsync(new TicketComment
+        {
+            TicketId  = ticketId, AuthorId = actorId,
+            Type      = CommentType.NotaInterna,
+            Body      = $"[Reagendada via chatbot para {scheduledAt:dd/MM/yyyy HH:mm}]" +
+                        (dto.Reason is not null ? $" Motivo: {dto.Reason}" : string.Empty),
+            CreatedAt = DateTime.UtcNow,
+        });
+
+        ticket.DueDate = scheduledAt;
+        await _ticketRepo.UpdateAsync(ticket);
+
+        await _audit.LogAsync("Tickets", "VISIT_RESCHEDULED",
+            $"Visita reagendada para {scheduledAt:dd/MM/yyyy HH:mm} en ticket {ticketId}",
+            actorId, actorName, ip);
+
+        return Result<TicketVisitDto>.Success(new TicketVisitDto(
+            visit.Id, visit.ScheduledAt, null, visit.TechnicianId, visit.Observations, visit.CreatedAt));
+    }
+
     // ── US-18 · CSAT ──────────────────────────────────────────────────────────
     public async Task<Result<TicketDetailDto>> SubmitCsatAsync(Guid ticketId, SubmitCsatDto dto, string ip)
     {

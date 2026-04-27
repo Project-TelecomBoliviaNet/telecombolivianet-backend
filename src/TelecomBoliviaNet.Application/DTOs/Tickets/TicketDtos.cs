@@ -121,6 +121,13 @@ public class ScheduleVisitDto
 
 public class SubmitCsatDto { public int Score { get; set; } }
 
+public class RescheduleVisitDto
+{
+    public string  ScheduledDate { get; set; } = string.Empty; // YYYY-MM-DD
+    public string  ScheduledTime { get; set; } = string.Empty; // HH:mm
+    public string? Reason        { get; set; }
+}
+
 // ── KPI / Métricas (US-21) ────────────────────────────────────────────────────
 public record TicketKpiDto(
     int TotalOpen, int TotalInProcess, int TotalResolved, int TotalClosed,

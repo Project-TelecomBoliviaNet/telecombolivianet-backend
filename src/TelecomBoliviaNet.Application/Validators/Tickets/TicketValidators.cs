@@ -99,3 +99,31 @@ public class ScheduleVisitValidator : AbstractValidator<ScheduleVisitDto>
             .WithMessage("Las observaciones no pueden superar 1000 caracteres.");
     }
 }
+
+public class RescheduleVisitValidator : AbstractValidator<RescheduleVisitDto>
+{
+    public RescheduleVisitValidator()
+    {
+        RuleFor(x => x.ScheduledDate)
+            .NotEmpty().WithMessage("La fecha es obligatoria.")
+            .Matches(@"^\d{4}-\d{2}-\d{2}$").WithMessage("La fecha debe tener formato YYYY-MM-DD.")
+            .Must(d => DateOnly.TryParseExact(d, "yyyy-MM-dd", out _))
+            .WithMessage("La fecha no es válida.");
+
+        RuleFor(x => x.ScheduledTime)
+            .NotEmpty().WithMessage("La hora es obligatoria.")
+            .Matches(@"^\d{2}:\d{2}$").WithMessage("La hora debe tener formato HH:mm.")
+            .Must(t => TimeOnly.TryParseExact(t, "HH:mm", out _))
+            .WithMessage("La hora no es válida.");
+
+        RuleFor(x => x).Must(x =>
+        {
+            if (!DateOnly.TryParseExact(x.ScheduledDate, "yyyy-MM-dd", out var date)) return false;
+            if (!TimeOnly.TryParseExact(x.ScheduledTime, "HH:mm", out var time)) return false;
+            return date.ToDateTime(time) > DateTime.Now.AddMinutes(-5);
+        }).WithMessage("La nueva fecha y hora deben ser futuras.");
+
+        RuleFor(x => x.Reason).MaximumLength(500).When(x => x.Reason is not null)
+            .WithMessage("El motivo no puede superar 500 caracteres.");
+    }
+}

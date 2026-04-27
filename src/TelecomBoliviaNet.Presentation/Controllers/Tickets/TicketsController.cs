@@ -20,6 +20,7 @@ public class TicketsController : BaseController
     private readonly IValidator<AddCommentDto>         _commentVal;
     private readonly IValidator<AddWorkLogDto>         _workLogVal;
     private readonly IValidator<ScheduleVisitDto>      _visitVal;
+    private readonly IValidator<RescheduleVisitDto>    _rescheduleVal;
     // BUG FIX: campos faltantes — causaban NullReferenceException en balanceo y adjuntos
     private readonly TicketBalanceoService             _balanceoSvc;
     private readonly TicketAttachmentService           _attSvc;
@@ -33,19 +34,21 @@ public class TicketsController : BaseController
         IValidator<AddCommentDto>         commentVal,
         IValidator<AddWorkLogDto>         workLogVal,
         IValidator<ScheduleVisitDto>      visitVal,
+        IValidator<RescheduleVisitDto>    rescheduleVal,
         TicketBalanceoService             balanceoSvc,
         TicketAttachmentService           attSvc)
     {
-        _svc        = svc;
-        _createVal  = createVal;
-        _updateVal  = updateVal;
-        _statusVal  = statusVal;
-        _assignVal  = assignVal;
-        _commentVal = commentVal;
-        _workLogVal = workLogVal;
-        _visitVal   = visitVal;
-        _balanceoSvc = balanceoSvc;
-        _attSvc      = attSvc;
+        _svc           = svc;
+        _createVal     = createVal;
+        _updateVal     = updateVal;
+        _statusVal     = statusVal;
+        _assignVal     = assignVal;
+        _commentVal    = commentVal;
+        _workLogVal    = workLogVal;
+        _visitVal      = visitVal;
+        _rescheduleVal = rescheduleVal;
+        _balanceoSvc   = balanceoSvc;
+        _attSvc        = attSvc;
     }
 
     [HttpGet]
@@ -144,6 +147,15 @@ public class TicketsController : BaseController
         var v = await _visitVal.ValidateAsync(dto);
         if (!v.IsValid) return BadRequestResult(string.Join(" ", v.Errors.Select(e => e.ErrorMessage)));
         var r = await _svc.ScheduleVisitAsync(id, dto, CurrentUserId, CurrentUserName, ClientIp);
+        return r.IsSuccess ? OkResult(r.Value) : BadRequestResult(r.ErrorMessage);
+    }
+
+    [HttpPatch("{id:guid}/reschedule")]
+    public async Task<IActionResult> Reschedule(Guid id, [FromBody] RescheduleVisitDto dto)
+    {
+        var v = await _rescheduleVal.ValidateAsync(dto);
+        if (!v.IsValid) return BadRequestResult(string.Join(" ", v.Errors.Select(e => e.ErrorMessage)));
+        var r = await _svc.RescheduleAsync(id, dto, CurrentUserId, CurrentUserName, ClientIp);
         return r.IsSuccess ? OkResult(r.Value) : BadRequestResult(r.ErrorMessage);
     }
 

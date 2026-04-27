@@ -275,6 +275,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<AddCommentDto>,         AddCommentValidator>();
         services.AddScoped<IValidator<AddWorkLogDto>,         AddWorkLogValidator>();
         services.AddScoped<IValidator<ScheduleVisitDto>,      ScheduleVisitValidator>();
+        services.AddScoped<IValidator<RescheduleVisitDto>,    RescheduleVisitValidator>();
 
         return services;
     }
