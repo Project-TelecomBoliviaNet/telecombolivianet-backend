@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TelecomBoliviaNet.Application\TelecomBoliviaNet.Application.csproj" />
+    <ProjectReference Include="..\TelecomBoliviaNet.Infrastructure\TelecomBoliviaNet.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentValidation"                              Version="11.*" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.*" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR"                  Version="1.*" />
+    <PackageReference Include="Swashbuckle.AspNetCore"                        Version="6.*" />
+    <PackageReference Include="Serilog.AspNetCore"                            Version="8.*" />
+    <PackageReference Include="Serilog.Sinks.Console"                         Version="5.*" />
+    <!-- Rate limiting: usa el middleware nativo de ASP.NET 8 (Microsoft.AspNetCore.RateLimiting) -->
+    <!-- No requiere paquete NuGet adicional — incluido en el SDK de .NET 8 -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design"          Version="8.*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

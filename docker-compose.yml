@@ -1,0 +1,197 @@
+version: '3.9'
+
+# ══════════════════════════════════════════════════════════════
+# TELECOM BOLIVIANET — Orquestación completa
+# Levanta los 4 servicios + infraestructura compartida
+#
+# Uso:
+#   Desarrollo:  docker compose up
+#   Producción:  docker compose -f docker-compose.yml up -d
+#
+# Variables de entorno OBLIGATORIAS antes de levantar en producción:
+#   JWT_KEY            — Clave secreta JWT (mín. 32 chars, sin default)
+#   DB_PASSWORD        — Contraseña de PostgreSQL backend
+#   WHATSAPP_TOKEN     — Token de la API de WhatsApp Business
+#   WHATSAPP_PHONE_NUMBER_ID — ID de teléfono de WhatsApp Business
+#
+#   Copiar .env.example a .env y completar antes de levantar.
+#   Si JWT_KEY no está definida, el backend no arrancará.
+# ══════════════════════════════════════════════════════════════
+
+networks:
+  bolivianet:
+    driver: bridge
+
+volumes:
+  postgres_backend:
+  postgres_chatbot:
+  redis_data:
+  ollama_data:
+  uploads_data:
+
+services:
+
+  # ── BASE DE DATOS — Backend .NET ─────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: bolivianet-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       telecombolivianet
+      POSTGRES_USER:     telecom_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-telecom_pass_2025}
+    volumes:
+      - postgres_backend:/var/lib/postgresql/data
+    networks:
+      - bolivianet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telecom_user -d telecombolivianet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── BASE DE DATOS — Chatbot (pgvector) ───────────────────────
+  postgres-chatbot:
+    image: pgvector/pgvector:pg16
+    container_name: bolivianet-postgres-chatbot
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       chatbot_db
+      POSTGRES_USER:     chatbot_user
+      POSTGRES_PASSWORD: ${CHATBOT_DB_PASSWORD:-chatbot_secret}
+    volumes:
+      - postgres_chatbot:/var/lib/postgresql/data
+      - ./bolivianet-chatbot/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - bolivianet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatbot_user -d chatbot_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── REDIS — Sesiones del chatbot ─────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: bolivianet-redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    networks:
+      - bolivianet
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── OLLAMA — LLM local para el chatbot ───────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bolivianet-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - bolivianet
+
+  # ── BACKEND — ASP.NET Core 8 ─────────────────────────────────
+  backend:
+    build:
+      context: ./bolivianet-backend
+      dockerfile: Dockerfile
+    container_name: bolivianet-backend
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: >
+        Host=postgres;Port=5432;Database=telecombolivianet;
+        Username=telecom_user;Password=${DB_PASSWORD:-telecom_pass_2025}
+      # ⚠️  JWT_KEY es OBLIGATORIO en producción — no tiene valor por defecto.
+      # Definir en .env o como secret de Docker/CI antes de levantar.
+      # Mínimo 32 caracteres aleatorios. Ejemplo de generación:
+      #   openssl rand -base64 48
+      Jwt__Key:      ${JWT_KEY:?ERROR: JWT_KEY no definida. Ver .env.example}
+      Jwt__Issuer:   TelecomBoliviaNet
+      Jwt__Audience: TelecomBoliviaNet_Client
+      WhatsApp__Token:         ${WHATSAPP_TOKEN:-}
+      WhatsApp__PhoneNumberId: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      Cors__AllowedOrigins__0: ${FRONTEND_URL:-http://localhost}
+    volumes:
+      - uploads_data:/app/wwwroot/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bolivianet
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── CHATBOT — NestJS WhatsApp ─────────────────────────────────
+  chatbot:
+    build:
+      context: ./bolivianet-chatbot/bolivianet-chatbot
+      dockerfile: Dockerfile
+    container_name: bolivianet-chatbot
+    restart: unless-stopped
+    env_file:
+      - ./bolivianet-chatbot/bolivianet-chatbot/.env
+    environment:
+      SISTEMA_API_URL:      http://backend:5000
+      DB_HOST:              postgres-chatbot
+      REDIS_HOST:           redis
+      OLLAMA_BASE_URL:      http://ollama:11434
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres-chatbot:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - bolivianet
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── NOTIFIER — Worker Python ──────────────────────────────────
+  notifier:
+    build:
+      context: ./bolivianet-notifier/repo-notif-worker
+      dockerfile: Dockerfile
+    container_name: bolivianet-notifier
+    restart: unless-stopped
+    environment:
+      DATABASE_URL:              postgresql://telecom_user:${DB_PASSWORD:-telecom_pass_2025}@postgres:5432/telecombolivianet
+      WHATSAPP_TOKEN:            ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID:  ${WHATSAPP_PHONE_NUMBER_ID:-}
+      POLL_INTERVAL_SECONDS:     30
+      TIMEZONE:                  America/La_Paz
+      LOG_LEVEL:                 INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bolivianet
+
+  # ── FRONTEND — React + Nginx ──────────────────────────────────
+  frontend:
+    build:
+      context: ./bolivianet-frontend
+      dockerfile: Dockerfile
+    container_name: bolivianet-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      - backend
+    networks:
+      - bolivianet
