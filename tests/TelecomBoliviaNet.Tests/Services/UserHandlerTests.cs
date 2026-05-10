@@ -347,10 +347,10 @@ public class UserHandlerTests
         result.ErrorMessage.Should().Contain("inválido");
     }
 
-    // ── TC-USR-17 · ForgotPassword usuario inexistente → generic OK ───────────
+    // ── TC-USR-17 · ForgotPassword usuario inexistente → Failure con mensaje directo ──
 
     [Fact]
-    public async Task ForgotPassword_UnknownEmail_ReturnsGenericSuccess()
+    public async Task ForgotPassword_UnknownEmail_ReturnsFailureWithMessage()
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["App:FrontendUrl"] = "http://localhost" })
@@ -367,7 +367,7 @@ public class UserHandlerTests
             new ForgotPasswordCommand("noexiste@bo.com"),
             CancellationToken.None);
 
-        result.IsSuccess.Should().BeTrue();
-        result.Value!.Channel.Should().Be("Email");
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("correo");
     }
 }

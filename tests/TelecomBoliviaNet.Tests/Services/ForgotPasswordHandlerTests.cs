@@ -123,10 +123,10 @@ public class ForgotPasswordHandlerTests
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
-    // ── TC-FP-03 · Email no registrado → respuesta genérica, sin email enviado ─
+    // ── TC-FP-03 · Email no registrado → Failure con mensaje directo, sin email enviado ─
 
     [Fact]
-    public async Task Handle_EmailNoRegistrado_RetornaRespuestaGenericaSinEnviarEmail()
+    public async Task Handle_EmailNoRegistrado_RetornaFailureSinEnviarEmail()
     {
         _userRepo.Setup(r => r.GetAll())
             .Returns(new List<UserSystem>().BuildMock());
@@ -134,19 +134,19 @@ public class ForgotPasswordHandlerTests
         var result = await MakeHandler().Handle(
             new ForgotPasswordCommand("noexiste@x.com"), CancellationToken.None);
 
-        result.IsSuccess.Should().BeTrue();
-        result.Value!.Message.Should().Contain("Si el correo existe");
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("No existe");
 
-        // Anti-enumeración: no se llama al servicio de email
+        // No se llama al servicio de email ni se crea token
         _email.Verify(e => e.SendPasswordResetAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         _resetRepo.Verify(r => r.AddAsync(It.IsAny<PasswordResetToken>()), Times.Never);
     }
 
-    // ── TC-FP-04 · Usuario inactivo → respuesta genérica, sin email enviado ───
+    // ── TC-FP-04 · Usuario inactivo → Failure con mensaje directo, sin email enviado ─
 
     [Fact]
-    public async Task Handle_UsuarioInactivo_RetornaRespuestaGenericaSinEnviarEmail()
+    public async Task Handle_UsuarioInactivo_RetornaFailureSinEnviarEmail()
     {
         var inactivo = MakeUser(status: UserStatus.Inactivo);
 
@@ -156,7 +156,8 @@ public class ForgotPasswordHandlerTests
         var result = await MakeHandler().Handle(
             new ForgotPasswordCommand(ValidEmail), CancellationToken.None);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("desactivada");
         _email.Verify(e => e.SendPasswordResetAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
